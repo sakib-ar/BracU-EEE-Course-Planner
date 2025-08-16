@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang = "en">
+<head>
+  <meta charset = "utf-8" />
+  <meta name = "viewport" content = "width = device-width, initial-scale=1" />
+  <title>BracU EEE Course Planner</title>
+  <style>
+    :root {
+      --bg: #0f172a;         /* slate-900 */
+      --panel: #111827;      /* gray-900 */
+      --muted: #475569;      /* slate-500 */
+      --ring: #38bdf8;       /* sky-400 */
+      --ok: #34d399;         /* emerald-400 */
+      --warn: #f87171;       /* red-400 */
+      --text: #e5e7eb;       /* gray-200 */
+      --sub: #9ca3af;        /* gray-400 */
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
+      Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 10% 0%, #121a33 0, #0a0f1f 50%, #070b16 100%);
+      color: var(--text);
+      display: grid; place-items: center; padding: 24px;
+    }
+    .app { width: min(1300px, 96vw); }
+
+    .header { display:flex; justify-content:space-between; align-items:end; gap:16px; margin-bottom: 16px; }
+    .title { font-size: clamp(20px, 4vw, 32px); font-weight: 800; letter-spacing: 0.2px; }
+    .subtitle { color: var(--sub); font-size: 14px; }
+
+    .layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+
+    .panel { background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid rgba(148,163,184,0.15); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    /* Palette */
+    .palette { padding: 14px; position: sticky; top: 16px; max-height: calc(100vh - 48px); overflow: auto; }
+    .palette h3 { margin: 0 0 8px 2px; font-size: 14px; font-weight: 700; color: #cbd5e1; }
+    .blocks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+    .block {
+      user-select: none; -webkit-user-drag: element; touch-action: manipulation;
+      display: grid; grid-template-rows: auto; gap: 2px; place-items: center; height: 64px; border-radius: 12px; font-weight: 800;
+      border: 1px solid rgba(148,163,184,0.18); cursor: grab; transition: transform .12s ease, box-shadow .12s ease, outline-color .12s ease;
+      background: #121a2e;
+    }
+    .block:active { cursor: grabbing; transform: scale(0.98); }
+    .block .code { font-size: 14px; letter-spacing: .2px; }
+    .block small.badge { position: absolute; top: 6px; right: 8px; font-size: 11px; background: rgba(2,6,23,.7); border: 1px solid rgba(148,163,184,.2); border-radius: 999px; padding: 2px 6px; }
+    .block span { pointer-events: none; }
+    .block-inner { position: relative; display:grid; place-items:center; width:100%; height:100%; }
+
+    .selected { outline: 2px solid var(--ring); outline-offset: 2px; box-shadow: 0 0 0 6px rgba(56,189,248,0.15); }
+
+    /* Board */
+    .board { padding: 16px; overflow: auto; }
+    .board h3 { margin: 0 0 8px 2px; font-size: 14px; font-weight: 700; color: #cbd5e1; display:flex; align-items:center; gap:8px; }
+    .hint { font-weight: 500; color: #94a3b8; font-size: 13px; }
+
+    table { border-collapse: separate; border-spacing: 8px; width: 100%; min-width: 900px; }
+    thead th { font-size: 12px; color: #9ca3af; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; }
+    tbody tr { transition: background .12s ease, border-color .12s ease; }
+
+    td.sem-label { white-space: nowrap; padding: 0 10px; font-weight: 700; color: #cbd5e1; }
+
+    td.dropzone {
+      width: 110px; height: 72px; border-radius: 14px; text-align: center; vertical-align: middle;
+      border: 1px dashed rgba(148,163,184,0.35); background: rgba(2,6,23,0.6);
+      transition: background .12s ease, border-color .12s ease, transform .1s ease;
+    }
+    td.dropzone.ready { border-color: #475569; }
+    td.dropzone.busy { border-color: #a3a3a3; background: rgba(148,163,184,0.08); }
+
+    td.totalcell { width: 210px; }
+    .total-wrap { display:flex; align-items:center; gap:10px; }
+    .bar { position: relative; flex: 1 1 auto; height: 14px; background: #0b1222; border-radius: 999px; border:1px solid rgba(148,163,184,.2); overflow: hidden; }
+    .bar > .fill { position: absolute; inset: 0 100% 0 0; border-radius: 999px; transition: inset 0.3s ease; }
+    .bar.ok > .fill { background: var(--ok); }
+    .bar.warn > .fill { background: var(--warn); }
+    .total-text { min-width: 52px; text-align: right; font-weight: 800; font-size: 12px; }
+
+    .controls { display:flex; gap:8px; align-items:center; margin-top: 8px; flex-wrap: wrap; }
+    button, label.button {
+      appearance: none; border: 1px solid rgba(148,163,184,0.25); background: #0b1222; color: var(--text);
+      border-radius: 999px; padding: 8px 14px; font-weight: 700; cursor: pointer; transition: transform .08s ease, background .12s ease, border-color .12s ease;
+      display:inline-flex; align-items:center; gap:8px; text-decoration:none;
+    }
+    button:hover, label.button:hover { background: #0e152a; }
+    button:active { transform: translateY(1px); }
+    .pill { font-size: 12px; color: #a3a3a3; border: 1px solid rgba(148,163,184,0.25); border-radius: 999px; padding: 3px 8px; }
+
+    .legend { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+    .legend .dot { width:10px; height:10px; border-radius:999px; display:inline-block; }
+    .dot.ready { background: #475569; }
+    .dot.busy { background: #a3a3a3; }
+    .dot.ok { background: var(--ok); }
+    .dot.bad { background: var(--warn); }
+
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 1100px) {
+      td.dropzone { width: 100px; }
+      td.totalcell { width: 180px; }
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .palette { position: static; max-height: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="header">
+      <div>
+        <div class="title">BracU EEE Course Planner</div>
+        <div class="subtitle">Live credit totals with constraints (min 9, max 16). Save/Load/Export/Import.</div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- Palette / Source blocks -->
+      <section class="panel palette" aria-label="Course palette">
+        <h3>Courses (Click and Drag)</h3>
+        <div style="display:flex; gap:8px; align-items:center; margin: 0 0 10px 2px; color: var(--sub); font-size: 12px;">
+          <span class="dot ok"></span><span></span>
+          <span class="dot bad"></span><span></span>
+        </div>
+        <div id="palette" class="blocks drop-area" aria-label="Palette return area"></div>
+        <div class="controls">
+          <button id="reset" title="Clear all semesters">Reset Board</button>
+          <button id="save" title="Save to your browser">Save</button>
+          <button id="load" title="Load from your browser">Load</button>
+          <button id="export" title="Download your plan as JSON">Export JSON</button>
+          <input type="file" id="importFile" accept="application/json" class="sr-only" />
+          <label for="importFile" class="button" title="Import a previously exported JSON">Import JSON</label>
+        </div>
+      </section>
+
+      <!-- Board / Table -->
+      <section class="panel board" aria-label="Semester planning board">
+        <h3>Semesters Table <span class="hint">(Drag-and-drop <em>or</em> click-to-place)</span></h3>
+        <table id="board" aria-label="Semester placement table">
+          <thead>
+            <tr>
+              <th>Semester</th>
+              <th colspan="8">Course Slots</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // ===================== Data =====================
+    const COURSES = [
+      { id: 'ENG101', cr: 3 }, { id: 'MAT110', cr: 3 }, { id: 'PHY111', cr: 3 }, { id: 'CHE110', cr: 3 },
+      { id: 'EEE101', cr: 3 }, { id: 'EEE101L', cr: 1 }, { id: 'MAT120', cr: 3 }, { id: 'PHY112', cr: 3 }, { id: 'EEE103', cr: 3 },
+      { id: 'ENG102', cr: 3 }, { id: 'HUM103', cr: 3 }, { id: 'EMB101', cr: 3 }, { id: 'BNG103', cr: 3 },
+	  { id: 'EEE203', cr: 3 }, { id: 'EEE203L', cr: 1 }, { id: 'MAT215', cr: 3 }, { id: 'STA201', cr: 3 }, { id: 'COD-1', cr: 3 },
+	  { id: 'EEE205', cr: 3 }, { id: 'EEE205L', cr: 1 }, { id: 'MAT216', cr: 3 }, { id: 'EEE221', cr: 3 }, { id: 'EEE221L', cr: 1 }, { id: 'EEE282', cr: 1 },
+      { id: 'EEE241', cr: 3 }, { id: 'EEE243', cr: 3 }, { id: 'EEE283', cr: 3 }, { id: 'EEE283L', cr: 1 }, { id: 'COD-2', cr: 3 },
+      { id: 'EEE305', cr: 3 }, { id: 'EEE305L', cr: 1 }, { id: 'EEE308', cr: 3 }, { id: 'EEE308L', cr: 1 }, { id: 'EEE309', cr: 3 }, { id: 'EEE359', cr: 3 },
+	  { id: 'EEE321', cr: 3 }, { id: 'EEE321L', cr: 1 }, { id: 'EEE341', cr: 3 }, { id: 'EEE341L', cr: 1 }, { id: 'EEE369', cr: 3 }, { id: 'EEE382', cr: 1 }, { id: 'EEE383', cr: 1 },
+	  { id: 'EEE343', cr: 3 }, { id: 'EEE343L', cr: 1 }, { id: 'EEE373', cr: 3 }, { id: 'EEE373L', cr: 1 }, { id: 'EEE384', cr: 1 }, { id: 'COD-3', cr: 3 },
+      { id: 'EEE499P', cr: 1 }, { id: 'EEE385', cr: 3 }, { id: 'Elective', cr: 3 }, { id: 'COD-4', cr: 3 },
+      { id: 'EEE499D', cr: 1.5 }, { id: 'Elective', cr: 3 }, { id: 'Elective', cr: 3 }, 
+	  { id: 'EEE499C', cr: 1.5 }, { id: 'Elective', cr: 3 }
+    ];
+
+    const SEMESTERS = 14; // 1..14
+    const SLOTS = 8;      // 1..8
+    const MIN_CR = 9;
+    const MAX_CR = 16;
+
+    const palette = document.getElementById('palette');
+    const tbody = document.getElementById('tbody');
+
+    // ===================== Build UI =====================
+    function createBlock({ id, cr }) {
+      const d = document.createElement('div');
+      d.className = 'block';
+      d.draggable = true;
+      d.dataset.id = id;
+      d.dataset.credits = cr;
+      d.setAttribute('role', 'button');
+      d.setAttribute('aria-pressed', 'false');
+      d.innerHTML = `<div class="block-inner"><span class="code">${id}</span><small class="badge">${cr}</small></div>`;
+      return d;
+    }
+
+    function buildPalette() {
+      palette.innerHTML = '';
+      COURSES.forEach(c => palette.appendChild(createBlock(c)));
+    }
+
+    function buildBoard() {
+      const rows = [];
+      for (let s = 1; s <= SEMESTERS; s++) {
+        const tr = document.createElement('tr');
+        const label = document.createElement('td');
+        label.className = 'sem-label';
+        label.textContent = `Sem. ${s}`;
+        tr.appendChild(label);
+        for (let i = 1; i <= SLOTS; i++) {
+          const td = document.createElement('td');
+          td.className = 'dropzone ready';
+          td.dataset.semester = s;
+          td.dataset.slot = i;
+          tr.appendChild(td);
+        }
+        const total = document.createElement('td');
+        total.className = 'totalcell';
+        total.innerHTML = `<div class="total-wrap"><div class="bar" aria-hidden="true"><div class="fill" style="inset:0 100% 0 0"></div></div><div class="total-text">0 cr</div></div>`;
+        tr.appendChild(total);
+        rows.push(tr);
+      }
+      tbody.replaceChildren(...rows);
+    }
+
+    // ===================== Drag & Click Logic =====================
+    function refreshZones() {
+      document.querySelectorAll('td.dropzone').forEach(z => {
+        if (z.querySelector('.block')) { z.classList.add('busy'); z.classList.remove('ready'); }
+        else { z.classList.add('ready'); z.classList.remove('busy'); }
+      });
+      updateAllTotals();
+    }
+
+    function findBlockById(id) { return document.querySelector(`.block[data-id="${CSS.escape(id)}"]`); }
+
+    function handleDrop(targetZone, e) {
+      e.preventDefault();
+      const id = e.dataTransfer.getData('text/plain');
+      const block = findBlockById(id);
+      if (!block) return;
+
+      if (targetZone === palette) {
+        palette.appendChild(block);
+        block.classList.remove('selected');
+        refreshZones();
+        return;
+      }
+
+      const existing = targetZone.querySelector('.block');
+      if (!existing) {
+        targetZone.appendChild(block);
+      } else {
+        palette.appendChild(existing);
+        targetZone.appendChild(block);
+      }
+      block.classList.remove('selected');
+      refreshZones();
+    }
+
+    function wireDnD() {
+      // Blocks
+      const onDragStart = e => {
+        const b = e.currentTarget; e.dataTransfer.setData('text/plain', b.dataset.id);
+        requestAnimationFrame(() => b.classList.add('selected'));
+      };
+      const onDragEnd = e => e.currentTarget.classList.remove('selected');
+
+      document.querySelectorAll('.block').forEach(b => {
+        b.addEventListener('dragstart', onDragStart);
+        b.addEventListener('dragend', onDragEnd);
+      });
+
+      const allowDrop = e => e.preventDefault();
+      [...document.querySelectorAll('td.dropzone'), palette].forEach(zone => {
+        zone.addEventListener('dragover', allowDrop);
+        zone.addEventListener('drop', e => handleDrop(zone, e));
+      });
+    }
+
+    // Click-to-place
+    let selected = null;
+    function clearSelected() {
+      if (selected) selected.classList.remove('selected');
+      document.querySelectorAll('.block').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      selected = null;
+    }
+
+    function wireClick() {
+      document.addEventListener('click', e => {
+        const b = e.target.closest('.block');
+        const zone = e.target.closest('td.dropzone');
+
+        if (b) {
+          if (selected === b) { clearSelected(); return; }
+          clearSelected();
+          selected = b; b.classList.add('selected'); b.setAttribute('aria-pressed', 'true');
+          return;
+        }
+
+        if (zone && selected) {
+          const existing = zone.querySelector('.block');
+          if (!existing) zone.appendChild(selected);
+          else { palette.appendChild(existing); zone.appendChild(selected); }
+          clearSelected(); refreshZones(); return;
+        }
+
+        if (e.target === palette && selected) {
+          palette.appendChild(selected); clearSelected(); refreshZones();
+        }
+      });
+    }
+
+    // ===================== Totals & Constraints =====================
+    function semesterTotal(sem) {
+      const cells = document.querySelectorAll(`td.dropzone[data-semester="${sem}"] .block`);
+      let t = 0;
+      cells.forEach(b => t += Number(b.dataset.credits));
+      return t;
+    }
+
+    function updateSemesterUI(sem) {
+      const tr = [...tbody.children][sem-1];
+      const totalCell = tr.querySelector('.totalcell');
+      const bar = totalCell.querySelector('.bar');
+      const fill = totalCell.querySelector('.fill');
+      const text = totalCell.querySelector('.total-text');
+
+      const total = semesterTotal(sem);
+      const pct = Math.min(100, (total / MAX_CR) * 100);
+      fill.style.inset = `0 ${100-pct}% 0 0`;
+      bar.classList.toggle('ok', total >= MIN_CR && total <= MAX_CR);
+      bar.classList.toggle('warn', !(total >= MIN_CR && total <= MAX_CR));
+      text.textContent = `${Number.isInteger(total) ? total : total.toFixed(1)} cr`;
+    }
+
+    function updateAllTotals() {
+      for (let s = 1; s <= SEMESTERS; s++) updateSemesterUI(s);
+    }
+
+    // ===================== Controls: Save/Load/Export/Import/Reset =====================
+    function snapshotPlan() {
+      const plan = { semesters: {}, version: 1 };
+      for (let s = 1; s <= SEMESTERS; s++) {
+        const ids = [];
+        document.querySelectorAll(`td.dropzone[data-semester="${s}"]`).forEach(cell => {
+          const b = cell.querySelector('.block');
+          ids.push(b ? b.dataset.id : null);
+        });
+        plan.semesters[s] = ids; // array length == SLOTS
+      }
+      return plan;
+    }
+
+    function applyPlan(plan) {
+      // Clear all to palette first
+      document.querySelectorAll('td.dropzone .block').forEach(b => palette.appendChild(b));
+      // Place according to plan
+      for (let s = 1; s <= SEMESTERS; s++) {
+        const arr = plan.semesters?.[s] || [];
+        arr.forEach((id, idx) => {
+          if (!id) return;
+          const b = findBlockById(id);
+          const cell = document.querySelector(`td.dropzone[data-semester="${s}"][data-slot="${idx+1}"]`);
+          if (b && cell) cell.appendChild(b);
+        });
+      }
+      refreshZones();
+    }
+
+    const KEY = 'coursePlanV1';
+
+    document.getElementById('save').addEventListener('click', () => {
+      const plan = snapshotPlan();
+      localStorage.setItem(KEY, JSON.stringify(plan));
+      flash('Plan saved to your browser.');
+    });
+
+    document.getElementById('load').addEventListener('click', () => {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) { flash('No saved plan found.', true); return; }
+      try { applyPlan(JSON.parse(raw)); flash('Plan loaded.'); }
+      catch { flash('Failed to load saved plan.', true); }
+    });
+
+    document.getElementById('export').addEventListener('click', () => {
+      const plan = snapshotPlan();
+      const blob = new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'course-plan.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('importFile').addEventListener('change', e => {
+      const file = e.target.files?.[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try { const plan = JSON.parse(reader.result); applyPlan(plan); flash('Plan imported.'); }
+        catch { flash('Invalid JSON file.', true); }
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById('reset').addEventListener('click', () => {
+      document.querySelectorAll('td.dropzone .block').forEach(b => palette.appendChild(b));
+      updateAllTotals(); clearSelected();
+    });
+
+    // ===================== Tiny Toast =====================
+    function flash(msg, error=false) {
+      const t = document.createElement('div');
+      t.textContent = msg;
+      t.style.position = 'fixed'; t.style.bottom = '16px'; t.style.right = '16px';
+      t.style.background = error ? 'rgba(239,68,68,0.95)' : 'rgba(17,24,39,0.95)';
+      t.style.border = '1px solid rgba(148,163,184,0.3)'; t.style.color = 'white';
+      t.style.padding = '10px 14px'; t.style.borderRadius = '999px'; t.style.fontWeight = '800';
+      t.style.boxShadow = '0 10px 30px rgba(0,0,0,0.35)'; t.style.zIndex = 9999;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 1800);
+    }
+
+    // ===================== Init =====================
+    buildPalette();
+    buildBoard();
+    wireDnD();
+    wireClick();
+    refreshZones();
+  </script>
+</body>
+</html>
